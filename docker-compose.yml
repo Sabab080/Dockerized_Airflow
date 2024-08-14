@@ -1,0 +1,110 @@
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  webserver:
+    build: .
+    depends_on:
+      - postgres
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__FERNET_KEY: "your_fernet_key"
+      AIRFLOW__WEBSERVER__RBAC: "True"
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    volumes:
+      - /home/airflow_docker/dags:/opt/airflow/dags
+      - /home/airflow_docker/logs:/opt/airflow/logs
+      - /home/airflow_docker/plugins:/opt/airflow/plugins
+      - /home/airflow_docker/sync_dags.sh:/opt/airflow/sync_dags.sh
+      - /home/airflow_docker/db_credentials.json:/opt/airflow/db_credentials.json  
+      - /home/airflow_docker/db_credentials.json:/opt/airflow/lookup_tables.txt
+    ports:
+      - "8080:8080"
+    entrypoint: ["sh", "-c", " exec airflow webserver"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+
+  scheduler:
+    build: .
+    depends_on:
+      - webserver
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__FERNET_KEY: "your_fernet_key"
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    volumes:
+      - /home/airflow_docker/dags:/opt/airflow/dags
+      - /home/airflow_docker/logs:/opt/airflow/logs
+      - /home/airflow_docker/plugins:/opt/airflow/plugins
+      - /home/airflow_docker/sync_dags.sh:/opt/airflow/sync_dags.sh
+      - /home/airflow_docker/db_credentials.json:/opt/airflow/db_credentials.json 
+      - /home/airflow_docker/db_credentials.json:/opt/airflow/lookup_tables.txt
+    entrypoint: ["sh", "-c", " exec airflow scheduler"]
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname $(hostname)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "4g"
+        reservations:
+          cpus: "1.0"
+          memory: "2g"
+
+  airflow-init:
+    build: .
+    depends_on:
+      - postgres
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__FERNET_KEY: "your_fernet_key"
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    volumes:
+      - /home/airflow_docker/dags:/opt/airflow/dags
+      - /home/airflow_docker/logs:/opt/airflow/logs
+      - /home/airflow_docker/plugins:/opt/airflow/plugins
+      - /home/airflow_docker/sync_dags.sh:/opt/airflow/sync_dags.sh
+      - /home/airflow_docker/db_credentials.json:/opt/airflow/db_credentials.json 
+      - /home/airflow_docker/db_credentials.json:/opt/airflow/lookup_tables.txt
+    entrypoint: ["sh", "-c", " airflow db init"]
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f /opt/airflow/airflow.db ]"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+
+volumes:
+  postgres_data:
+
+
+
+
